@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>룰렛 대시보드</title>
+    <style>
+        :root {
+            --bg: #0f0f15;
+            --surface: #1a1a27;
+            --card: #20202f;
+            --border: #2a2a3d;
+            --accent: #16f2b3;
+            --accent-dim: rgba(22, 242, 179, 0.1);
+            --text: #e8e8f0;
+            --muted: #6b6b8a;
+            --green: #22c55e;
+            --red: #ef4444;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+        }
+
+        /* ── 헤더 ── */
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px 32px;
+            background: var(--surface);
+            border-bottom: 1px solid var(--border);
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+        .header-title { font-size: 1.05em; font-weight: 700; color: var(--accent); letter-spacing: 0.5px; }
+        .header-right { display: flex; align-items: center; gap: 14px; }
+        .refresh-dot {
+            width: 8px; height: 8px; border-radius: 50%;
+            background: var(--green); box-shadow: 0 0 6px var(--green);
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+        .last-updated { font-size: 0.76em; color: var(--muted); }
+
+        /* ── 탭 ── */
+        .tabs {
+            display: flex; gap: 2px;
+            padding: 18px 32px 0;
+            border-bottom: 1px solid var(--border);
+        }
+        .tab {
+            padding: 9px 18px; font-size: 0.87em; font-weight: 600;
+            color: var(--muted); cursor: pointer;
+            border-bottom: 2px solid transparent;
+            transition: all 0.18s; user-select: none;
+        }
+        .tab:hover { color: var(--text); }
+        .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+        /* ── 본문 ── */
+        .content { padding: 26px 32px; max-width: 1200px; margin: 0 auto; }
+        .tab-pane { display: none; }
+        .tab-pane.active { display: block; }
+
+        /* ── 요약 카드 ── */
+        .stat-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 14px; margin-bottom: 24px;
+        }
+        .stat-card {
+            background: var(--card); border: 1px solid var(--border);
+            border-radius: 12px; padding: 18px 20px;
+        }
+        .stat-label { font-size: 0.73em; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.7px; margin-bottom: 9px; }
+        .stat-value { font-size: 1.85em; font-weight: 700; color: var(--text); }
+        .stat-value.green { color: var(--green); }
+        .stat-value.red   { color: var(--red); }
+        .stat-value.accent { color: var(--accent); }
+
+        /* ── 유저 카드 ── */
+        .user-grid { display: grid; gap: 12px; }
+        .user-card {
+            background: var(--card); border: 1px solid var(--border);
+            border-radius: 13px; overflow: hidden; transition: border-color 0.2s;
+        }
+        .user-card:hover { border-color: var(--accent); }
+        .user-card-header {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 14px 20px; border-bottom: 1px solid var(--border);
+        }
+        .user-card-header .left { display: flex; align-items: center; gap: 11px; }
+        .user-avatar {
+            width: 36px; height: 36px; border-radius: 9px;
+            background: var(--accent-dim); display: flex;
+            align-items: center; justify-content: center;
+            font-size: 0.95em; color: var(--accent); font-weight: 700;
+        }
+        .user-name { font-weight: 700; font-size: 0.97em; color: var(--text); }
+        .user-pc   { font-size: 0.75em; color: var(--muted); margin-top: 2px; }
+        .badge { padding: 4px 11px; border-radius: 20px; font-size: 0.75em; font-weight: 700; }
+        .badge-running { background: rgba(34,197,94,0.12); color: var(--green); border: 1px solid rgba(34,197,94,0.25); }
+        .badge-stopped { background: rgba(239,68,68,0.10); color: var(--red);   border: 1px solid rgba(239,68,68,0.22); }
+        .user-card-body { display: grid; grid-template-columns: repeat(6,1fr); }
+        .stat-cell { padding: 13px 16px; border-right: 1px solid var(--border); }
+        .stat-cell:last-child { border-right: none; }
+        .stat-cell .lbl { font-size: 0.70em; color: var(--muted); margin-bottom: 5px; font-weight: 500; }
+        .stat-cell .val { font-size: 0.92em; font-weight: 700; color: var(--text); }
+        .stat-cell .val.green { color: var(--green); }
+        .stat-cell .val.red   { color: var(--red); }
+        .user-card-footer {
+            padding: 7px 20px; font-size: 0.70em; color: var(--muted);
+            border-top: 1px solid var(--border); text-align: right;
+        }
+
+        /* ── 히스토리 테이블 ── */
+        .history-table { width: 100%; border-collapse: collapse; font-size: 0.87em; }
+        .history-table th {
+            text-align: left; padding: 9px 14px;
+            color: var(--muted); font-size: 0.73em; font-weight: 600;
+            text-transform: uppercase; letter-spacing: 0.5px;
+            border-bottom: 1px solid var(--border);
+        }
+        .history-table td { padding: 12px 14px; border-bottom: 1px solid rgba(42,42,61,0.5); color: var(--text); }
+        .history-table tr:hover td { background: rgba(22,242,179,0.03); }
+        .history-table .uname { font-weight: 700; color: var(--accent); }
+
+        /* ── 차트 ── */
+        .chart-card {
+            background: var(--card); border: 1px solid var(--border);
+            border-radius: 13px; padding: 22px; margin-bottom: 18px;
+        }
+        .chart-title { font-size: 0.80em; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.7px; margin-bottom: 18px; }
+
+        /* ── 빈 상태 ── */
+        .empty { text-align: center; padding: 56px 20px; color: var(--muted); font-size: 0.88em; }
+        .loading-bar {
+            height: 2px; background: var(--accent); width: 50px;
+            margin: 0 auto 11px; border-radius: 2px;
+            animation: ld 1.2s ease-in-out infinite;
+        }
+        @keyframes ld { 0%{width:16px;opacity:.4} 50%{width:70px;opacity:1} 100%{width:16px;opacity:.4} }
+
+        /* ── 반응형 ── */
+        @media(max-width:900px){
+            .stat-grid { grid-template-columns: repeat(2,1fr); }
+            .user-card-body { grid-template-columns: repeat(3,1fr); }
+            .content,.tabs,.header { padding-left:16px; padding-right:16px; }
+        }
+        @media(max-width:540px){
+            .user-card-body { grid-template-columns: repeat(2,1fr); }
+        }
+
+        /* ── 동기화 ── */
+        .right-badges { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+        .badge-sync    { background: rgba(22,242,179,0.12); color: var(--accent); border: 1px solid rgba(22,242,179,0.28); }
+        .badge-partner { background: rgba(139,92,246,0.12); color: #a78bfa;        border: 1px solid rgba(139,92,246,0.28); }
+        .badge-nosync  { background: rgba(107,107,138,0.10); color: var(--muted);  border: 1px solid rgba(107,107,138,0.22); }
+        .badge-master  { background: rgba(22,242,179,0.15);  color: var(--accent); border: 1px solid rgba(22,242,179,0.40); }
+        .badge-slave   { background: rgba(139,92,246,0.15);  color: #a78bfa;       border: 1px solid rgba(139,92,246,0.40); }
+        .sync-row {
+            display: flex; gap: 22px; padding: 8px 20px;
+            background: rgba(22,242,179,0.03);
+            border-top: 1px solid var(--border);
+            font-size: 0.75em; color: var(--muted);
+        }
+        .sync-row span { display: flex; align-items: center; gap: 5px; }
+        .color-dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+        .color-red   { background: #ef4444; box-shadow: 0 0 4px rgba(239,68,68,0.6); }
+        .color-black { background: #9ca3af; border: 1px solid #6b7280; }
+
+        /* ── 삭제 버튼 ── */
+        .btn-del {
+            background: none; border: 1px solid rgba(239,68,68,0.30);
+            color: rgba(239,68,68,0.55); border-radius: 7px;
+            padding: 4px 9px; font-size: 0.78em; cursor: pointer;
+            transition: all 0.15s; line-height: 1;
+        }
+        .btn-del:hover { background: rgba(239,68,68,0.12); color: var(--red); border-color: var(--red); }
+        .btn-del-all {
+            background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.28);
+            color: var(--red); border-radius: 8px;
+            padding: 6px 14px; font-size: 0.82em; font-weight: 600; cursor: pointer;
+            transition: all 0.15s;
+        }
+        .btn-del-all:hover { background: rgba(239,68,68,0.18); }
+        .history-header {
+            display: flex; align-items: center; justify-content: space-between;
+            margin-bottom: 14px;
+        }
+        .history-header-title { font-size: 0.82em; font-weight: 600; color: var(--muted); }
+
+        /* ── 확인 모달 ── */
+        .modal-overlay {
+            display: none; position: fixed; inset: 0;
+            background: rgba(0,0,0,0.65); z-index: 100;
+            align-items: center; justify-content: center;
+        }
+        .modal-overlay.show { display: flex; }
+        .modal-box {
+            background: var(--card); border: 1px solid var(--border);
+            border-radius: 16px; padding: 28px 30px; min-width: 320px; max-width: 420px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+        }
+        .modal-icon { font-size: 2em; margin-bottom: 10px; }
+        .modal-title { font-size: 1em; font-weight: 700; color: var(--text); margin-bottom: 8px; }
+        .modal-desc { font-size: 0.83em; color: var(--muted); margin-bottom: 22px; line-height: 1.6; }
+        .modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
+        .btn-cancel {
+            background: none; border: 1px solid var(--border); color: var(--muted);
+            border-radius: 8px; padding: 7px 16px; font-size: 0.85em; cursor: pointer;
+            transition: all 0.15s;
+        }
+        .btn-cancel:hover { border-color: var(--text); color: var(--text); }
+        .btn-confirm {
+            background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.4);
+            color: var(--red); border-radius: 8px;
+            padding: 7px 16px; font-size: 0.85em; font-weight: 700; cursor: pointer;
+            transition: all 0.15s;
+        }
+        .btn-confirm:hover { background: rgba(239,68,68,0.28); }
+    </style>
+</head>
+<body>
+
+<!-- 확인 모달 -->
+<div class="modal-overlay" id="modal">
+    <div class="modal-box">
+        <div class="modal-icon">🗑️</div>
+        <div class="modal-title" id="modal-title">삭제 확인</div>
+        <div class="modal-desc" id="modal-desc"></div>
+        <div class="modal-actions">
+            <button class="btn-cancel" onclick="closeModal()">취소</button>
+            <button class="btn-confirm" id="modal-ok">삭제</button>
+        </div>
+    </div>
+</div>
+
+<!-- 헤더 -->
+<div class="header">
+    <div class="header-title">🎰 ROULETTE DASHBOARD</div>
+    <div class="header-right">
+        <div class="refresh-dot"></div>
+        <div class="last-updated" id="last-updated">연결 중...</div>
+    </div>
+</div>
+
+<!-- 탭 -->
+<div class="tabs">
+    <div class="tab active" onclick="switchTab('realtime',this)">실시간 현황</div>
+    <div class="tab" onclick="switchTab('history',this)">세션 히스토리</div>
+    <div class="tab" onclick="switchTab('charts',this)">통계 차트</div>
+</div>
+
+<!-- 본문 -->
+<div class="content">
+    <!-- 실시간 -->
+    <div id="pane-realtime" class="tab-pane active">
+        <div class="stat-grid">
+            <div class="stat-card"><div class="stat-label">가동 중</div><div class="stat-value accent" id="s-running">-</div></div>
+            <div class="stat-card"><div class="stat-label">정지 중</div><div class="stat-value" id="s-stopped">-</div></div>
+            <div class="stat-card"><div class="stat-label">총 배팅 횟수</div><div class="stat-value" id="s-bets">-</div></div>
+            <div class="stat-card"><div class="stat-label">합산 순손익</div><div class="stat-value" id="s-profit">-</div></div>
+        </div>
+        <div class="user-grid" id="user-list">
+            <div class="empty"><div class="loading-bar"></div>데이터 로딩 중...</div>
+        </div>
+    </div>
+    <!-- 히스토리 -->
+    <div id="pane-history" class="tab-pane">
+        <div class="history-header">
+            <div class="history-header-title" id="history-count"></div>
+            <button class="btn-del-all" onclick="confirmDeleteAllHistory()">🗑️ 전체 히스토리 삭제</button>
+        </div>
+        <div id="history-wrap">
+            <div class="empty"><div class="loading-bar"></div>히스토리 로딩 중...</div>
+        </div>
+    </div>
+    <!-- 차트 -->
+    <div id="pane-charts" class="tab-pane">
+        <div class="chart-card"><div class="chart-title">일별 순손익 추이</div><canvas id="chartProfit" height="100"></canvas></div>
+        <div class="chart-card"><div class="chart-title">계정별 총 수익</div><canvas id="chartPerf" height="80"></canvas></div>
+    </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.3.0/dist/chart.umd.min.js"></script>
+
+<script>
+    firebase.initializeApp({ databaseURL: "https://game-63170-default-rtdb.asia-southeast1.firebasedatabase.app" });
+    const db = firebase.database();
+
+    function switchTab(name, el) {
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+        el.classList.add('active');
+        document.getElementById('pane-' + name).classList.add('active');
+        if (name === 'charts') loadCharts();
+    }
+
+    function fmt(n) { return Number(n||0).toLocaleString(); }
+    function fmtP(n) { n=Number(n||0); return (n>=0?'+':'')+n.toLocaleString()+'원'; }
+    function pc(n) { return Number(n)>=0?'green':'red'; }
+    function dur(s,e) {
+        if(!s||!e) return '-';
+        const d=new Date(e)-new Date(s);
+        const h=Math.floor(d/3600000), m=Math.floor((d%3600000)/60000);
+        return h>0?`${h}시간 ${m}분`:`${m}분`;
+    }
+
+    // ─── 모달 ───
+    let _modalCb = null;
+    function showModal(title, desc, cb) {
+        document.getElementById('modal-title').textContent = title;
+        document.getElementById('modal-desc').textContent  = desc;
+        _modalCb = cb;
+        document.getElementById('modal-ok').onclick = () => { closeModal(); cb(); };
+        document.getElementById('modal').classList.add('show');
+    }
+    function closeModal() {
+        document.getElementById('modal').classList.remove('show');
+        _modalCb = null;
+    }
+    document.getElementById('modal').addEventListener('click', e => {
+        if (e.target === e.currentTarget) closeModal();
+    });
+
+    // ─── 실시간 현황 ───
+    let statsData = {};
+    let syncData  = {};
+
+    function isSlotActive(slot) {
+        if (!slot || !slot.last_update) return false;
+        return (Date.now() - new Date(slot.last_update).getTime()) < 30000;
+    }
+
+    // ── 유저 stats 삭제 ──
+    function deleteUserStats(username, slot) {
+        const path  = slot ? `/stats/${username}/${slot}` : `/stats/${username}`;
+        const label = slot ? `${username} (${slot})` : username;
+        showModal(
+            `${label} 통계 삭제`,
+            `"${label}"의 실시간 통계 데이터를 삭제합니다.\n매크로가 실행 중이면 곧 다시 업로드됩니다.`,
+            () => db.ref(path).remove()
+        );
+    }
+
+    // ── 유저 카드 생성 헬퍼 ──
+    function buildUserCard(u, s, syncBadgeHtml, syncRowHtml, roleLabel, slotKey) {
+        const isRun = s.status === 'running';
+        const np = Number(s.net_profit || 0);
+        const roleBadge = roleLabel
+            ? `<span class="badge ${roleLabel === '마스터' ? 'badge-master' : 'badge-slave'}">${roleLabel === '마스터' ? '👑 마스터' : '🤝 슬레이브'}</span>`
+            : '';
+        const delSlot = slotKey ? `'${slotKey}'` : 'null';
+        return `
+            <div class="user-card">
+                <div class="user-card-header">
+                    <div class="left">
+                        <div class="user-avatar">${u.charAt(0).toUpperCase()}</div>
+                        <div><div class="user-name">${u}</div><div class="user-pc">${s.pc_name||'-'}</div></div>
+                    </div>
+                    <div class="right-badges">
+                        ${roleBadge}
+                        ${syncBadgeHtml}
+                        <span class="badge ${isRun?'badge-running':'badge-stopped'}">${isRun?'● 가동중':'● 정지'}</span>
+                        <button class="btn-del" onclick="deleteUserStats('${u}',${delSlot})" title="통계 삭제">🗑️</button>
+                    </div>
+                </div>
+                <div class="user-card-body">
+                    <div class="stat-cell"><div class="lbl">초기 금액</div><div class="val">${fmt(s.initial_balance)}원</div></div>
+                    <div class="stat-cell"><div class="lbl">현재 금액</div><div class="val">${fmt(s.current_balance)}원</div></div>
+                    <div class="stat-cell"><div class="lbl">총 배팅</div><div class="val">${fmt(s.total_bets)}회</div></div>
+                    <div class="stat-cell"><div class="lbl">총 승리</div><div class="val green">+${fmt(s.total_win)}원</div></div>
+                    <div class="stat-cell"><div class="lbl">총 손실</div><div class="val red">-${fmt(s.total_loss)}원</div></div>
+                    <div class="stat-cell"><div class="lbl">순손익</div><div class="val ${pc(np)}">${fmtP(np)}</div></div>
+                </div>
+                ${syncRowHtml}
+                <div class="user-card-footer">시작: ${s.start_time||'-'} &nbsp;|&nbsp; 업데이트: ${s.last_update||'-'}</div>
+            </div>`;
+    }
+
+    function renderUsers() {
+        const data = statsData;
+        if (!data || Object.keys(data).length === 0) {
+            document.getElementById('user-list').innerHTML = '<div class="empty">활성화된 매크로가 없습니다.</div>';
+            document.getElementById('s-running').textContent = 0;
+            document.getElementById('s-stopped').textContent = 0;
+            document.getElementById('s-bets').textContent = '0회';
+            const sp = document.getElementById('s-profit');
+            sp.textContent = '+0원'; sp.className = 'stat-value green';
+            return;
+        }
+        let run=0, stop=0, bets=0, profit=0, html='';
+        for (const [u, v] of Object.entries(data)) {
+            const userSync = syncData[u];
+            // 동기화 모드 감지: slot1/slot2 중첩 구조 (status 필드가 없으면 중첩)
+            const isSyncNested = v && typeof v === 'object' && !v.status && (v.slot1 || v.slot2);
+
+            if (isSyncNested) {
+                // ── 슬롯별 카드 2개 표시 (마스터 / 슬레이브) ──
+                for (const slotKey of ['slot1', 'slot2']) {
+                    const s = v[slotKey];
+                    if (!s || !s.status) continue;
+                    const isRun = s.status === 'running';
+                    const np = Number(s.net_profit || 0);
+                    if (isRun) run++; else stop++;
+                    bets   += Number(s.total_bets || 0);
+                    profit += np;
+
+                    const roleLabel  = s.role || (slotKey === 'slot1' ? '마스터' : '슬레이브');
+                    const partnerKey  = slotKey === 'slot1' ? 'slot2' : 'slot1';
+                    const partnerRole = slotKey === 'slot1' ? '슬레이브' : '마스터';
+
+                    let syncBadgeHtml = `<span class="badge badge-sync">🔄 동기화</span>`;
+                    let syncRowHtml   = '';
+                    if (userSync) {
+                        const mySlotSync    = userSync[slotKey];
+                        const partnerSync   = userSync[partnerKey];
+                        const partnerActive = isSlotActive(partnerSync);
+                        if (isSlotActive(mySlotSync)) {
+                            const isRed   = (mySlotSync.color || '') === '빨강';
+                            const dotCls  = isRed ? 'color-red' : 'color-black';
+                            const colorKo = isRed ? '빨강' : '검정';
+                            const partnerSpan = partnerActive
+                                ? `<span style="color:var(--accent)">✓ ${partnerRole} 연결됨</span>`
+                                : `<span>${partnerRole} 대기 중...</span>`;
+                            syncRowHtml = `
+                <div class="sync-row">
+                    <span><span class="color-dot ${dotCls}"></span>선택 색상: ${colorKo}</span>
+                    ${partnerSpan}
+                </div>`;
+                        }
+                    }
+                    html += buildUserCard(u, s, syncBadgeHtml, syncRowHtml, roleLabel, slotKey);
+                }
+            } else {
+                // ── 솔로(비동기화) 모드 ──
+                const s = v;
+                if (!s || !s.status) continue;
+                const isRun = s.status === 'running';
+                const np = Number(s.net_profit || 0);
+                if (isRun) run++; else stop++;
+                bets   += Number(s.total_bets || 0);
+                profit += np;
+
+                let syncBadgeHtml = '', syncRowHtml = '';
+                if (userSync) {
+                    const s1Active = isSlotActive(userSync.slot1);
+                    const s2Active = isSlotActive(userSync.slot2);
+                    let mySlot = null, slotNum = '', partnerActive = false;
+                    if (s1Active)      { mySlot = userSync.slot1; slotNum = '#1'; partnerActive = s2Active; }
+                    else if (s2Active) { mySlot = userSync.slot2; slotNum = '#2'; partnerActive = s1Active; }
+                    if (mySlot) {
+                        syncBadgeHtml = `<span class="badge badge-sync">🔄 ${slotNum} 슬롯</span>`;
+                        if (partnerActive) syncBadgeHtml += `<span class="badge badge-partner">파트너 연결됨</span>`;
+                        const isRed   = (mySlot.color || '') === '빨강';
+                        const dotCls  = isRed ? 'color-red' : 'color-black';
+                        const colorKo = isRed ? '빨강' : '검정';
+                        const partnerSpan = partnerActive
+                            ? `<span style="color:var(--accent)">✓ 파트너 연결됨</span>`
+                            : `<span>파트너 대기 중...</span>`;
+                        syncRowHtml = `
+                <div class="sync-row">
+                    <span><span class="color-dot ${dotCls}"></span>선택 색상: ${colorKo}</span>
+                    ${partnerSpan}
+                </div>`;
+                    } else {
+                        syncBadgeHtml = `<span class="badge badge-nosync">비동기화</span>`;
+                    }
+                }
+                html += buildUserCard(u, s, syncBadgeHtml, syncRowHtml, null, null);
+            }
+        }
+        document.getElementById('s-running').textContent = run;
+        document.getElementById('s-stopped').textContent = stop;
+        document.getElementById('s-bets').textContent = fmt(bets)+'회';
+        const sp = document.getElementById('s-profit');
+        sp.textContent = fmtP(profit);
+        sp.className = 'stat-value '+pc(profit);
+        document.getElementById('user-list').innerHTML = html;
+    }
+
+    db.ref('stats').on('value', snap => {
+        statsData = snap.val() || {};
+        document.getElementById('last-updated').textContent = '업데이트 ' + new Date().toLocaleTimeString('ko-KR');
+        renderUsers();
+    });
+
+    db.ref('sync').on('value', snap => {
+        syncData = snap.val() || {};
+        renderUsers();
+    });
+
+    // 히스토리
+    function confirmDeleteAllHistory() {
+        showModal(
+            '전체 히스토리 삭제',
+            '저장된 세션 히스토리 전체를 삭제합니다.\n이 작업은 되돌릴 수 없습니다.',
+            () => db.ref('history').remove()
+        );
+    }
+    function confirmDeleteHistoryEntry(username, key) {
+        showModal(
+            '세션 삭제',
+            `"${username}"의 세션 기록 1건을 삭제합니다.`,
+            () => db.ref(`history/${username}/${key}`).remove()
+        );
+    }
+
+    db.ref('history').on('value', snap => {
+        const data = snap.val();
+        const countEl = document.getElementById('history-count');
+        if (!data) {
+            document.getElementById('history-wrap').innerHTML = '<div class="empty">저장된 히스토리가 없습니다.</div>';
+            if (countEl) countEl.textContent = '';
+            return;
+        }
+        let rows = [];
+        for (const [u, sessions] of Object.entries(data))
+            for (const [key, s] of Object.entries(sessions))
+                rows.push({...s, username:u, _key:key});
+        rows.sort((a,b)=>(b.start_time||'').localeCompare(a.start_time||''));
+        if (countEl) countEl.textContent = `총 ${rows.length}건`;
+        let t = `<table class="history-table"><thead><tr>
+            <th>계정</th><th>역할</th><th>PC</th><th>시작</th><th>종료</th><th>진행</th><th>배팅</th><th>초기금액</th><th>최종금액</th><th>순손익</th><th></th>
+        </tr></thead><tbody>`;
+        rows.forEach(s => {
+            const np = Number(s.net_profit||0);
+            const roleLabel = s.role || '';
+            const roleTd = roleLabel === '마스터'
+                ? `<td><span class="badge badge-master" style="font-size:0.72em">👑 마스터</span></td>`
+                : roleLabel === '슬레이브'
+                    ? `<td><span class="badge badge-slave" style="font-size:0.72em">🤝 슬레이브</span></td>`
+                    : `<td style="color:var(--muted)">-</td>`;
+            t += `<tr>
+                <td class="uname">${s.username}</td>
+                ${roleTd}
+                <td>${s.pc_name||'-'}</td>
+                <td>${s.start_time||'-'}</td>
+                <td>${s.end_time||'-'}</td>
+                <td>${dur(s.start_time,s.end_time)}</td>
+                <td>${fmt(s.total_bets)}회</td>
+                <td>${fmt(s.initial_balance)}원</td>
+                <td>${fmt(s.final_balance)}원</td>
+                <td style="color:${np>=0?'var(--green)':'var(--red)'};font-weight:700">${fmtP(np)}</td>
+                <td><button class="btn-del" onclick="confirmDeleteHistoryEntry('${s.username}','${s._key}')">🗑️</button></td>
+            </tr>`;
+        });
+        t += '</tbody></table>';
+        document.getElementById('history-wrap').innerHTML = t;
+    });
+
+    // 차트
+    let cP=null, cPf=null;
+    function loadCharts() {
+        db.ref('history').once('value', snap => {
+            const data = snap.val(); if(!data) return;
+            const daily={}, users={};
+            for(const [u,sessions] of Object.entries(data)) {
+                users[u]={profit:0};
+                for(const s of Object.values(sessions)) {
+                    const d=(s.start_time||'').split(' ')[0];
+                    const p=Number(s.net_profit||0);
+                    daily[d]=(daily[d]||0)+p;
+                    users[u].profit+=p;
+                }
+            }
+            const dates=Object.keys(daily).sort();
+            const profits=dates.map(d=>daily[d]);
+            const scaleOpts = (cb) => ({
+                y:{ticks:{color:'#6b6b8a',callback:cb},grid:{color:'rgba(42,42,61,0.8)'}},
+                x:{ticks:{color:'#6b6b8a'},grid:{color:'rgba(42,42,61,0.8)'}}
+            });
+            const legOpts = { labels:{color:'#6b6b8a',font:{size:12}} };
+            const valCb = v => v.toLocaleString()+'원';
+
+            if(cP) cP.destroy();
+            cP = new Chart(document.getElementById('chartProfit'),{
+                type:'line',
+                data:{labels:dates,datasets:[{label:'순손익',data:profits,borderColor:'#16f2b3',backgroundColor:'rgba(22,242,179,0.07)',tension:0.4,fill:true,pointBackgroundColor:'#16f2b3',pointRadius:4}]},
+                options:{responsive:true,plugins:{legend:legOpts},scales:scaleOpts(valCb)}
+            });
+
+            const uNames=Object.keys(users);
+            const uP=uNames.map(u=>users[u].profit);
+            if(cPf) cPf.destroy();
+            cPf = new Chart(document.getElementById('chartPerf'),{
+                type:'bar',
+                data:{labels:uNames,datasets:[{label:'총 수익',data:uP,
+                    backgroundColor:uP.map(p=>p>=0?'rgba(34,197,94,0.7)':'rgba(239,68,68,0.7)'),
+                    borderColor:uP.map(p=>p>=0?'#22c55e':'#ef4444'),borderWidth:1,borderRadius:6}]},
+                options:{responsive:true,plugins:{legend:legOpts},scales:scaleOpts(valCb)}
+            });
+        });
+    }
+</script>
+</body>
+</html>
