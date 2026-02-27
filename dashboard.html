@@ -285,7 +285,7 @@
     </div>
     <!-- 차트 -->
     <div id="pane-charts" class="tab-pane">
-        <div class="chart-card"><div class="chart-title">일별 순손익 추이</div><canvas id="chartProfit" height="100"></canvas></div>
+        <div class="chart-card"><div class="chart-title">일별 순이익 추이</div><canvas id="chartProfit" height="100"></canvas></div>
         <div class="chart-card"><div class="chart-title">계정별 총 수익</div><canvas id="chartPerf" height="80"></canvas></div>
     </div>
 </div>
@@ -531,10 +531,10 @@
         rows.sort((a,b)=>(b.start_time||'').localeCompare(a.start_time||''));
         if (countEl) countEl.textContent = `총 ${rows.length}건`;
         let t = `<table class="history-table"><thead><tr>
-            <th>계정</th><th>역할</th><th>PC</th><th>시작</th><th>종료</th><th>진행</th><th>배팅</th><th>초기금액</th><th>최종금액</th><th>순손익</th><th></th>
+            <th>계정</th><th>역할</th><th>PC</th><th>시작</th><th>종료</th><th>진행</th><th>배팅</th><th>초기금액</th><th>최종금액</th><th>순이익</th><th></th>
         </tr></thead><tbody>`;
         rows.forEach(s => {
-            const np = Number(s.net_profit||0);
+            const np = Number(s.final_balance||0) - Number(s.initial_balance||0);
             const roleLabel = s.role || '';
             const roleTd = roleLabel === '마스터'
                 ? `<td><span class="badge badge-master" style="font-size:0.72em">👑 마스터</span></td>`
@@ -569,7 +569,7 @@
                 users[u]={profit:0};
                 for(const s of Object.values(sessions)) {
                     const d=(s.start_time||'').split(' ')[0];
-                    const p=Number(s.net_profit||0);
+                    const p=Number(s.final_balance||0)-Number(s.initial_balance||0);
                     daily[d]=(daily[d]||0)+p;
                     users[u].profit+=p;
                 }
@@ -586,7 +586,7 @@
             if(cP) cP.destroy();
             cP = new Chart(document.getElementById('chartProfit'),{
                 type:'line',
-                data:{labels:dates,datasets:[{label:'순손익',data:profits,borderColor:'#16f2b3',backgroundColor:'rgba(22,242,179,0.07)',tension:0.4,fill:true,pointBackgroundColor:'#16f2b3',pointRadius:4}]},
+                data:{labels:dates,datasets:[{label:'순이익',data:profits,borderColor:'#16f2b3',backgroundColor:'rgba(22,242,179,0.07)',tension:0.4,fill:true,pointBackgroundColor:'#16f2b3',pointRadius:4}]},
                 options:{responsive:true,plugins:{legend:legOpts},scales:scaleOpts(valCb)}
             });
 
