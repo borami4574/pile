@@ -197,6 +197,75 @@
         }
         .history-header-title { font-size: 0.82em; font-weight: 600; color: var(--muted); }
 
+        /* ── 실시간 로그 ── */
+        .log-toolbar {
+            display: flex; align-items: center; gap: 10px;
+            margin-bottom: 14px; flex-wrap: wrap;
+        }
+        .log-select {
+            background: var(--card); border: 1px solid var(--border);
+            color: var(--text); border-radius: 8px;
+            padding: 6px 12px; font-size: 0.82em; cursor: pointer;
+            outline: none;
+        }
+        .log-select:focus { border-color: var(--accent); }
+        .btn-log {
+            background: none; border: 1px solid var(--border);
+            color: var(--muted); border-radius: 8px;
+            padding: 6px 13px; font-size: 0.82em;
+            cursor: pointer; transition: all 0.15s; white-space: nowrap;
+        }
+        .btn-log:hover { border-color: var(--accent); color: var(--accent); }
+        .btn-log.active { background: rgba(22,242,179,0.10); border-color: var(--accent); color: var(--accent); }
+        .btn-log-clear {
+            background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.28);
+            color: var(--red); border-radius: 8px;
+            padding: 6px 13px; font-size: 0.82em; font-weight: 600;
+            cursor: pointer; transition: all 0.15s; margin-left: auto;
+        }
+        .btn-log-clear:hover { background: rgba(239,68,68,0.18); }
+        .log-count { font-size: 0.78em; color: var(--muted); }
+        .log-panel {
+            background: #0a0a12;
+            border: 1px solid var(--border);
+            border-radius: 13px;
+            height: 540px;
+            overflow-y: auto;
+            font-family: 'Consolas', 'D2Coding', 'Courier New', monospace;
+            font-size: 0.82em;
+            padding: 12px 0;
+            scroll-behavior: smooth;
+        }
+        .log-panel::-webkit-scrollbar { width: 6px; }
+        .log-panel::-webkit-scrollbar-track { background: transparent; }
+        .log-panel::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+        .log-row {
+            display: flex; align-items: flex-start; gap: 10px;
+            padding: 3px 16px;
+            border-bottom: 1px solid rgba(42,42,61,0.35);
+            transition: background 0.1s;
+        }
+        .log-row:hover { background: rgba(22,242,179,0.03); }
+        .log-time { color: #4a4a6a; flex-shrink: 0; font-size: 0.92em; padding-top: 1px; }
+        .log-user {
+            flex-shrink: 0; min-width: 72px; max-width: 90px;
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+            font-weight: 700; color: var(--accent); font-size: 0.92em; padding-top: 1px;
+        }
+        .log-msg { color: var(--text); line-height: 1.5; word-break: break-word; }
+        .log-msg.warn  { color: #f59e0b; }
+        .log-msg.error { color: var(--red); }
+        .log-msg.success { color: var(--green); }
+        .log-msg.info   { color: #60a5fa; }
+        .log-msg.sync   { color: #a78bfa; }
+        .log-empty-msg { text-align:center; padding: 60px 20px; color: var(--muted); font-size: 0.88em; font-family: 'Segoe UI', sans-serif; }
+        .log-pause-badge {
+            display: inline-flex; align-items: center; gap: 5px;
+            background: rgba(245,158,11,0.12); border: 1px solid rgba(245,158,11,0.30);
+            color: #f59e0b; border-radius: 20px;
+            padding: 3px 10px; font-size: 0.76em; font-weight: 700;
+        }
+
         /* ── 확인 모달 ── */
         .modal-overlay {
             display: none; position: fixed; inset: 0;
@@ -257,6 +326,7 @@
     <div class="tab active" onclick="switchTab('realtime',this)">실시간 현황</div>
     <div class="tab" onclick="switchTab('history',this)">세션 히스토리</div>
     <div class="tab" onclick="switchTab('charts',this)">통계 차트</div>
+    <div class="tab" onclick="switchTab('logs',this)">실시간 로그</div>
 </div>
 
 <!-- 본문 -->
@@ -287,6 +357,21 @@
     <div id="pane-charts" class="tab-pane">
         <div class="chart-card"><div class="chart-title">일별 순이익 추이</div><canvas id="chartProfit" height="100"></canvas></div>
         <div class="chart-card"><div class="chart-title">계정별 총 수익</div><canvas id="chartPerf" height="80"></canvas></div>
+    </div>
+    <!-- 실시간 로그 -->
+    <div id="pane-logs" class="tab-pane">
+        <div class="log-toolbar">
+            <select class="log-select" id="log-user-filter" onchange="applyLogFilter()">
+                <option value="all">👤 전체 유저</option>
+            </select>
+            <button class="btn-log active" id="btn-autoscroll" onclick="toggleAutoScroll()">⬇ 자동스크롤</button>
+            <button class="btn-log" id="btn-pause" onclick="toggleLogPause()">⏸ 일시정지</button>
+            <span class="log-count" id="log-count"></span>
+            <button class="btn-log-clear" onclick="confirmClearLogs()">🗑️ 로그 전체 삭제</button>
+        </div>
+        <div class="log-panel" id="log-panel">
+            <div class="log-empty-msg"><div class="loading-bar"></div>로그 로딩 중...</div>
+        </div>
     </div>
 </div>
 
@@ -558,6 +643,102 @@
         t += '</tbody></table>';
         document.getElementById('history-wrap').innerHTML = t;
     });
+
+    // ─── 실시간 로그 ───
+    let logsData      = [];        // 정렬된 로그 항목 전체
+    let logsPaused    = false;
+    let logsAutoScroll = true;
+    let logFilterUser = 'all';
+
+    function logMsgClass(msg) {
+        if (/❌|오류|실패|Error|error/.test(msg)) return 'error';
+        if (/⚠️|경고|파싱실패|이상/.test(msg)) return 'warn';
+        if (/🎉|✅|목표 달성|성공|승리|당첨/.test(msg)) return 'success';
+        if (/🔄|📡|동기화|슬레이브|마스터|파트너/.test(msg)) return 'sync';
+        if (/▶|시작|정지|⏹|💰|설정/.test(msg)) return 'info';
+        return '';
+    }
+
+    function renderLogs() {
+        const panel = document.getElementById('log-panel');
+        let entries = logsData;
+        if (logFilterUser !== 'all')
+            entries = entries.filter(e => e.user === logFilterUser);
+
+        document.getElementById('log-count').textContent = entries.length + '개';
+
+        if (entries.length === 0) {
+            panel.innerHTML = '<div class="log-empty-msg">로그가 없습니다.</div>';
+            return;
+        }
+        let html = '';
+        for (const e of entries) {
+            const cls = logMsgClass(e.msg);
+            const msgHtml = e.msg.replace(/</g,'&lt;').replace(/>/g,'&gt;');
+            html += `<div class="log-row">
+                <span class="log-time">${e.time.slice(11,19)}</span>
+                <span class="log-user" title="${e.user}">${e.user}</span>
+                <span class="log-msg ${cls}">${msgHtml}</span>
+            </div>`;
+        }
+        panel.innerHTML = html;
+        if (logsAutoScroll) panel.scrollTop = panel.scrollHeight;
+    }
+
+    function updateLogUserFilter() {
+        const users = [...new Set(logsData.map(e => e.user))].sort();
+        const sel = document.getElementById('log-user-filter');
+        const cur = sel.value;
+        sel.innerHTML = '<option value="all">👤 전체 유저</option>' +
+            users.map(u => `<option value="${u}"${u===cur?' selected':''}>${u}</option>`).join('');
+    }
+
+    db.ref('logs').limitToLast(300).on('value', snap => {
+        if (logsPaused) return;
+        const data = snap.val();
+        if (!data) {
+            logsData = [];
+            document.getElementById('log-panel').innerHTML = '<div class="log-empty-msg">기록된 로그가 없습니다.</div>';
+            document.getElementById('log-count').textContent = '';
+            return;
+        }
+        logsData = [];
+        for (const [user, entries] of Object.entries(data)) {
+            for (const [key, log] of Object.entries(entries)) {
+                logsData.push({ user, time: log.time || '', msg: log.msg || '', pc: log.pc || '' });
+            }
+        }
+        logsData.sort((a, b) => b.time.localeCompare(a.time));
+        updateLogUserFilter();
+        renderLogs();
+    });
+
+    function applyLogFilter() {
+        logFilterUser = document.getElementById('log-user-filter').value;
+        renderLogs();
+    }
+
+    function toggleAutoScroll() {
+        logsAutoScroll = !logsAutoScroll;
+        const btn = document.getElementById('btn-autoscroll');
+        btn.classList.toggle('active', logsAutoScroll);
+        if (logsAutoScroll) document.getElementById('log-panel').scrollTop = document.getElementById('log-panel').scrollHeight;
+    }
+
+    function toggleLogPause() {
+        logsPaused = !logsPaused;
+        const btn = document.getElementById('btn-pause');
+        btn.textContent = logsPaused ? '▶ 재개' : '⏸ 일시정지';
+        btn.classList.toggle('active', logsPaused);
+    }
+
+    function confirmClearLogs() {
+        showModal(
+            '로그 전체 삭제',
+            '실시간 로그 데이터 전체를 삭제합니다.\n이 작업은 되돌릴 수 없습니다.',
+            () => db.ref('logs').remove()
+        );
+    }
 
     // 차트
     let cP=null, cPf=null;
